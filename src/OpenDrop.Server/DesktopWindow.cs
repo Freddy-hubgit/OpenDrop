@@ -99,6 +99,12 @@ internal sealed class DesktopWindow : Form
         toolbar.Controls.Add(full);
         toolbar.Controls.Add(status);
         toolbar.Controls.Add(checkUpdate);
+        var version = typeof(DesktopWindow).Assembly.GetName().Version!.ToString(3);
+        var versionInfo = new Label
+        {
+            Text = $"Version {version}", AutoSize = true, Padding = new(10, 7, 6, 0)
+        };
+        toolbar.Controls.Add(versionInfo);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
