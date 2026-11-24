@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+:root { color-scheme: light dark; font: 16px/1.55 system-ui, sans-serif; }
+body { margin: 0; padding: clamp(1rem, 6vw, 4rem) 1rem; background: #edf2f7; color: #182638; }
+main { max-width: 38rem; margin: auto; background: #fff; border: 1px solid #ced9e5;
+  padding: clamp(1.25rem, 5vw, 2.5rem); border-radius: 1rem; }
+header { color: #3b526e; font-weight: 650; }
+h1 { margin: .35rem 0; font-size: clamp(2rem, 7vw, 2.8rem); line-height: 1.12; }
+h2 { font-size: 1.1rem; margin: 1.5rem 0 .25rem; }
+p, li { overflow-wrap: anywhere; }
+form { display: grid; gap: .75rem; margin-top: 1.5rem; }
+label { font-weight: 650; }
+input, button { font: inherit; max-width: 100%; }
+button { justify-self: start; padding: .65rem 1.15rem; border: 0; border-radius: .5rem;
+  background: #174887; color: #fff; font-weight: 650; cursor: pointer; }
+button:disabled { opacity: .55; cursor: default; }
+:focus-visible { outline: 3px solid #3681cf; outline-offset: 3px; }
+a { color: #174887; }
+img { max-width: 100%; height: auto; border: 1px solid #ced9e5; }
+progress { width: 100%; margin-top: 1rem; }
+@media (prefers-color-scheme: dark) {
+  body { background: #111a26; color: #edf3f9; }
+  main { background: #192636; border-color: #44566b; }
+  header, a { color: #b7d6ff; }
+  button { background: #b7d6ff; color: #14263d; }
+}

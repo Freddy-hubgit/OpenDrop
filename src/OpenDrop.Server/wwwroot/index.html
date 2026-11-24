@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Datei senden · OpenDrop Windows</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/send.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>OpenDrop Windows</header>
+    <h1>Datei senden</h1>
+    <p>Wähle eine Datei bis 100 MiB für den Windows-PC aus.</p>
+    <form id="send">
+      <label for="file">Datei</label>
+      <input id="file" type="file" required disabled>
+      <button id="submit" disabled>Übertragen</button>
+    </form>
+    <progress id="progress" max="100" hidden aria-label="Übertragungsfortschritt"></progress>
+    <p id="status" role="status">Öffne den Einladungslink oder scanne den QR-Code am PC.</p>
+    <noscript>Aktiviere JavaScript, um Dateien zu senden.</noscript>
+  </main>
+</body>
+</html>

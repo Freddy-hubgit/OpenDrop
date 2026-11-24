@@ -1,0 +1,31 @@
+name: OpenDrop Windows release
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build Windows packages
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Expected tag vMAJOR.MINOR.PATCH' }
+          foreach ($arch in @('x64', 'arm64')) {
+            $rid = "win-$arch"
+            dotnet publish ./src/OpenDrop.Server -c Release -p:DesktopBuild=true "-p:Version=$version" -r $rid --self-contained true -o "dist/$rid"
+            if ($LASTEXITCODE -ne 0) { throw "Publish failed for $rid" }
+            Compress-Archive -Path "dist/$rid/*" -DestinationPath "OpenDrop-Windows-$rid.zip"
+          }
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME --verify-tag --generate-notes OpenDrop-Windows-win-x64.zip OpenDrop-Windows-win-arm64.zip

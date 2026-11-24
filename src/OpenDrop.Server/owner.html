@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dateien empfangen · OpenDrop Windows</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/owner.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>OpenDrop Windows</header>
+    <h1>Dateien empfangen</h1>
+    <p id="status" role="status">Einladung wird geladen …</p>
+    <img id="qr" alt="QR-Code für die Übertragung" width="224" height="224" hidden>
+    <p><a id="invite" target="_blank" rel="noopener noreferrer" hidden>Einladung im Browser öffnen</a></p>
+    <h2>AirDrop</h2>
+    <button id="check-airdrop" type="button">WLAN-Adapter prüfen</button>
+    <p id="airdrop-status" role="status"></p>
+    <ul id="airdrop-adapters"></ul>
+    <h2>Empfangsordner</h2>
+    <p id="folder"></p>
+    <h2>Letzte Übertragungen</h2>
+    <p id="empty">Bisher wurden keine Dateien empfangen.</p>
+    <ul id="receipts"></ul>
+  </main>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(DesktopBuild)' == 'true'">
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>OpenDrop.Windows</AssemblyName>
+    <DefineConstants>$(DefineConstants);OPENDROP_DESKTOP</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(DesktopBuild)' != 'true'">
+    <Compile Remove="DesktopWindow.cs;ReleaseUpdater.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.8.1" />
+    <Content Update="wwwroot/**/*" CopyToOutputDirectory="PreserveNewest" />
+    <None Remove="owner.html" />
+    <Content Include="owner.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
