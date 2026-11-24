@@ -29,7 +29,10 @@ jobs:
             throw 'Kein veröffentlichter Release im Format vMAJOR.MINOR.PATCH gefunden.'
           }
           $latest = $tag.Substring(1)
-          dotnet run --project ./tests/UpdateSmoke -p:Version=0.1.0 -- $latest
+          $parts = [version]$latest
+          $baseline = if ($parts.Build -gt 0) { '{0}.{1}.{2}' -f $parts.Major, $parts.Minor, ($parts.Build - 1) } else { '0.1.0' }
+          Write-Host "Updatepfad: $baseline -> $latest"
+          dotnet run --project ./tests/UpdateSmoke "-p:Version=$baseline" -- $latest
           if ($LASTEXITCODE -ne 0) { throw 'Update-Download oder Paketprüfung fehlgeschlagen.' }
           dotnet run --project ./tests/UpdateSmoke "-p:Version=$latest" -- current
           if ($LASTEXITCODE -ne 0) { throw 'Versionsvergleich fehlgeschlagen.' }
