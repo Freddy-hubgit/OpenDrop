@@ -2,6 +2,8 @@ const requestDialog = document.querySelector('#incoming-request');
 const requestText = document.querySelector('#incoming-text');
 const transferStatus = document.querySelector('#request-status');
 let incomingId;
+const friendOffer = document.querySelector('#friend-offer');
+const friendOfferLabel = document.querySelector('#friend-offer-label');
 let sendingRequest = false;
 let asking = false;
 
@@ -25,14 +27,14 @@ function explainResult(state) {
   }[state] ?? 'Die Anfrage ist fehlgeschlagen.';
 }
 
-async function askDevice(peer) {
+async function askDevice(peer, addFriend = false) {
   if (sendingRequest) return;
   sendingRequest = true;
   transferStatus.textContent = 'Verbindungsanfrage wird gesendet …';
   const secret = Array.from(crypto.getRandomValues(new Uint8Array(32)),
     byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
   try {
-    const offer = await connectionApi('/owner/request', { address: peer.address, secret });
+    const offer = await connectionApi('/owner/request', { address: peer.address, secret, addFriend });
     if (offer.state !== 'pending') {
       transferStatus.textContent = explainResult(offer.state);
       return;
@@ -40,7 +42,7 @@ async function askDevice(peer) {
     transferStatus.textContent = 'Warte auf ' + peer.name + '. Vergleicht den Code ' + offer.code + '.';
     for (let i = 0; i < 32; i++) {
       await new Promise(resolve => setTimeout(resolve, 3000));
-      const result = await connectionApi('/owner/request/status', { address: peer.address, id: offer.id, secret });
+      const result = await connectionApi('/owner/request/status', { address: peer.address, id: offer.id, secret, addFriend });
       if (result.state === 'pending') continue;
       if (result.state === 'accepted' && result.invitation) {
         const link = new URL(result.invitation);
@@ -71,9 +73,12 @@ async function pollIncoming() {
         if (requestDialog.open) requestDialog.close();
         incomingId = undefined;
       } else {
+        if (incomingId !== request.id) friendOffer.checked = false;
+        friendOfferLabel.hidden = !request.addFriend;
         incomingId = request.id;
         requestText.textContent = request.name + ' möchte sich verbinden. Vergleicht den Code ' +
-          request.code + ' persönlich oder telefonisch, bevor du annimmst.';
+          request.code + ' persönlich oder telefonisch, bevor du annimmst.' +
+          (request.addFriend ? ' Das Gerät möchte außerdem als Freund gespeichert werden.' : '');
         if (!requestDialog.open) requestDialog.showModal();
       }
     } catch { }
@@ -85,7 +90,11 @@ async function respond(accept) {
   if (!incomingId || asking) return;
   asking = true;
   try {
-    const result = await connectionApi('/owner/requests/respond', { id: incomingId, accept });
+    const result = await connectionApi('/owner/requests/respond', { id: incomingId, accept, addFriend: accept && !friendOfferLabel.hidden && friendOffer.checked });
+    if (result.state === 'friend-save-failed') {
+      requestText.textContent = 'Die Freundesliste konnte nicht gespeichert werden. Du kannst ohne Freundschaft annehmen.';
+      return;
+    }
     transferStatus.textContent = result.state === 'accepted' ? 'Verbindung angenommen.'
       : result.state === 'declined' ? 'Verbindung abgelehnt.' : explainResult(result.state);
     incomingId = undefined;

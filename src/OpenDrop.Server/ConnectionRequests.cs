@@ -2,14 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 
-internal sealed record IncomingOffer(string Name, string Secret);
-internal sealed record ConnectionChoice(string Id, bool Accept);
+internal sealed record IncomingOffer(string Name, string Secret, bool AddFriend = false, string? FriendKey = null);
+internal sealed record ConnectionChoice(string Id, bool Accept, bool AddFriend = false);
 internal sealed record TargetDevice(string Address);
-internal sealed record OfferResult(string State, string? Id = null, string? Code = null, string? Invitation = null);
+internal sealed record OfferResult(string State, string? Id = null, string? Code = null, string? Invitation = null, bool FriendAdded = false);
 internal sealed record OutgoingOffer(string Address, string Id);
-internal sealed record DeviceEndpoint(string Origin, string Pin);
+internal sealed record DeviceEndpoint(string Origin, string Pin, string Name, string? FriendKey);
 
-internal sealed class ConnectionRequests(string? pin, string transferOrigin)
+internal sealed class ConnectionRequests(string? pin, string transferOrigin, FriendBook friends)
 {
     private readonly object gate = new();
     private readonly Dictionary<string, Offer> inbox = new();
@@ -17,7 +17,7 @@ internal sealed class ConnectionRequests(string? pin, string transferOrigin)
     private readonly Dictionary<string, (IPAddress Address, DateTimeOffset Expiry)> grants = new();
     private sealed record Rejections(int Count, DateTimeOffset Until);
     private sealed record Offer(IPAddress Address, string Name, string Secret, string Code,
-        DateTimeOffset Expiry, string State = "pending", string? Grant = null);
+        DateTimeOffset Expiry, bool AddFriend, string State = "pending", string? Grant = null, bool FriendAdded = false);
 
     public object[] Pending()
     {
@@ -25,7 +25,7 @@ internal sealed class ConnectionRequests(string? pin, string transferOrigin)
         {
             ClearExpired();
             return inbox.Where(item => item.Value.State == "pending")
-                .Select(item => (object)new { id = item.Key, item.Value.Name, item.Value.Code }).ToArray();
+                .Select(item => (object)new { id = item.Key, item.Value.Name, item.Value.Code, item.Value.AddFriend }).ToArray();
         }
     }
 
@@ -45,7 +45,7 @@ internal sealed class ConnectionRequests(string? pin, string transferOrigin)
                 return new("busy");
             var id = Guid.NewGuid().ToString("N");
             var code = Code(pin, request.Secret);
-            inbox.Add(id, new(address, request.Name, request.Secret, code, DateTimeOffset.UtcNow.AddSeconds(90)));
+            inbox.Add(id, new(address, request.Name, request.Secret, code, DateTimeOffset.UtcNow.AddSeconds(90), request.AddFriend));
             return new("pending", id, code);
         }
     }
@@ -58,11 +58,13 @@ internal sealed class ConnectionRequests(string? pin, string transferOrigin)
             if (!inbox.TryGetValue(choice.Id, out var offer) || offer.State != "pending") return new("expired");
             if (choice.Accept)
             {
+                var addFriend = choice.AddFriend && offer.AddFriend;
+                if (addFriend && !friends.Add(offer.Name, offer.Secret)) return new("friend-save-failed");
                 var grant = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
                 grants.Add(grant, (offer.Address, DateTimeOffset.UtcNow.AddMinutes(5)));
-                inbox[choice.Id] = offer with { State = "accepted", Grant = grant };
+                inbox[choice.Id] = offer with { State = "accepted", Grant = grant, FriendAdded = addFriend };
                 rejections.Remove(offer.Address);
-                return new("accepted");
+                return new("accepted", FriendAdded: addFriend);
             }
 
             var count = rejections.TryGetValue(offer.Address, out var previous) ? previous.Count + 1 : 1;
@@ -82,7 +84,7 @@ internal sealed class ConnectionRequests(string? pin, string transferOrigin)
                 !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(offer.Secret), Convert.FromHexString(secret)))
                 return new("expired");
             return new(offer.State, Invitation: offer.Grant is not null
-                ? $"{transferOrigin}/#pair={offer.Grant}&pin={pin}" : null);
+                ? $"{transferOrigin}/#pair={offer.Grant}&pin={pin}" : null, FriendAdded: offer.FriendAdded);
         }
     }
 
@@ -141,5 +143,5 @@ internal sealed class ConnectionRequests(string? pin, string transferOrigin)
     }
 }
 
-internal sealed record SendOffer(string Address, string Secret, string? Id);
+internal sealed record SendOffer(string Address, string Secret, string? Id, bool AddFriend = false);
 internal sealed record OfferProof(string Id, string Secret);

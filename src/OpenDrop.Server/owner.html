@@ -18,10 +18,17 @@
       <label class="visibility"><input id="visible" type="checkbox"> Im WLAN sichtbar</label>
       <p id="discovery-status" role="status">Schalte die Sichtbarkeit auf beiden Geräten ein.</p>
       <ul id="nearby-devices"></ul>
+      <h2>Freunde</h2>
+      <label class="visibility"><input id="friends-visible" type="checkbox"> Für Freunde sichtbar</label>
+      <p id="friends-status" role="status"></p>
+      <ul id="saved-friends"></ul>
       <p id="request-status" role="status"></p>
       <dialog id="incoming-request" aria-labelledby="incoming-title">
         <h2 id="incoming-title">Verbindungsanfrage</h2>
         <p id="incoming-text"></p>
+        <label id="friend-offer-label" class="visibility" hidden>
+          <input id="friend-offer" type="checkbox"> Als Freund speichern
+        </label>
         <button id="request-accept" type="button">Annehmen</button>
         <button id="request-decline" type="button">Ablehnen</button>
       </dialog>

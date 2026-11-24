@@ -29,3 +29,8 @@ body.dashboard { padding: 0; min-height: 100vh; background: #101923; color: #edf
   border-radius: .85rem; padding: 1.5rem; }
 #incoming-request::backdrop { background: #050b12aa; }
 #request-decline { margin-left: .5rem; background: #283a50; color: #edf3f9; }
+
+#saved-friends { list-style: none; padding: 0; }
+#saved-friends li { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin: .4rem 0; }
+#saved-friends button, #nearby-devices button + button { margin-left: .35rem; }
+#friend-offer-label { margin: .75rem 0; }

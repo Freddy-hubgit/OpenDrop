@@ -1,4 +1,8 @@
 const visible = document.querySelector('#visible');
+const friendsVisible = document.querySelector('#friends-visible');
+const savedFriends = document.querySelector('#saved-friends');
+const friendsStatus = document.querySelector('#friends-status');
+let previousFriends;
 const discoveryStatus = document.querySelector('#discovery-status');
 const devices = document.querySelector('#nearby-devices');
 const connect = document.querySelector('#connect-peer');
@@ -9,15 +13,33 @@ let updating = false;
 let previous = '';
 let generation = 0;
 
-function draw({ visible: active, error, devices: peers }) {
+function draw({ visible: active, friendsVisible: friendsActive, error, devices: peers, friends }) {
+  friendsVisible.checked = friendsActive;
+  friendsStatus.textContent = !friends.length ? 'Noch keine gespeicherten Freunde.'
+    : friendsActive ? 'Deine Freunde können dich im WLAN finden.' : 'Freundes-Sichtbarkeit ist aus.';
+  const friendSnapshot = JSON.stringify(friends);
+  if (previousFriends !== friendSnapshot) {
+    previousFriends = friendSnapshot;
+    savedFriends.replaceChildren(...friends.map(friend => {
+      const row = document.createElement('li');
+      const name = document.createElement('span');
+      const remove = document.createElement('button');
+      name.textContent = friend.name;
+      remove.textContent = 'Entfernen';
+      remove.setAttribute('aria-label', friend.name + ' entfernen');
+      remove.onclick = () => mutateNearby('/owner/friends/remove', { id: friend.id });
+      row.append(name, remove);
+      return row;
+    }));
+  }
   visible.checked = active;
-  discoveryStatus.textContent = !active ? 'Schalte die Sichtbarkeit auf beiden Geräten ein.'
+  discoveryStatus.textContent = !active && !friendsActive ? 'Schalte die Sichtbarkeit auf beiden Geräten ein.'
     : error ?? (peers.length ? '' : 'Suche nach OpenDrop-Geräten im gleichen WLAN …');
   if (selected && !peers.some(peer => peer.address === selected.address && peer.origin === selected.origin)) {
     selected = null;
     connect.hidden = true;
   }
-  const key = JSON.stringify(peers.map(({ name, address, origin, pin }) => [name, address, origin, pin]));
+  const key = JSON.stringify(peers.map(({ name, address, origin, pin, isFriend }) => [name, address, origin, pin, isFriend]));
   if (previous === key) return;
   previous = key;
   devices.replaceChildren(...peers.map(peer => {
@@ -25,7 +47,7 @@ function draw({ visible: active, error, devices: peers }) {
     const name = document.createElement('strong');
     const detail = document.createElement('small');
     name.textContent = peer.name;
-    detail.textContent = peer.origin ? peer.address : peer.address + ' · HTTPS-Empfang aus';
+    detail.textContent = peer.address + (peer.isFriend ? ' · Freund' : '') + (peer.origin ? '' : ' · HTTPS-Empfang aus');
     item.append(name, detail);
     if (peer.origin) {
       const choose = document.createElement('button');
@@ -33,6 +55,12 @@ function draw({ visible: active, error, devices: peers }) {
         choose.textContent = 'Verbinden';
         choose.onclick = () => askDevice(peer);
         item.append(choose);
+        if (!peer.isFriend) {
+          const add = document.createElement('button');
+          add.textContent = 'Als Freund hinzufügen';
+          add.onclick = () => askDevice(peer, true);
+          item.append(add);
+        }
         return item;
       }
       choose.textContent = 'Einladung eingeben';
@@ -68,24 +96,29 @@ async function pollNearby() {
   }
   setTimeout(pollNearby, 2000);
 }
-visible.addEventListener('change', async () => {
+async function mutateNearby(path, payload) {
+  if (updating) return;
   generation++;
   updating = true;
-  visible.disabled = true;
+  visible.disabled = friendsVisible.disabled = true;
   try {
-    draw(await fetchPeers({
+    const response = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-OpenDrop-UI': 'nearby' },
-      body: JSON.stringify({ enabled: visible.checked })
-    }));
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error();
+    draw(await response.json());
   } catch {
-    visible.checked = !visible.checked;
-    discoveryStatus.textContent = 'Die Sichtbarkeit konnte nicht geändert werden.';
+    discoveryStatus.textContent = 'Die Änderung konnte nicht gespeichert werden.';
   } finally {
     updating = false;
-    visible.disabled = false;
+    visible.disabled = friendsVisible.disabled = false;
   }
-});
+}
+visible.addEventListener('change', () => mutateNearby('/owner/nearby', { enabled: visible.checked }));
+friendsVisible.addEventListener('change', () =>
+  mutateNearby('/owner/friends/visible', { enabled: friendsVisible.checked }));
 connect.addEventListener('submit', event => {
   event.preventDefault();
   let link;

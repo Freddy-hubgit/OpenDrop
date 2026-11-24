@@ -82,8 +82,11 @@ var windowsInvitation = appOnlyTls
 var qr = PngByteQRCodeHelper.GetQRCode(invitation, QRCodeGenerator.ECCLevel.Q, 6);
 using var uploadSlot = new SemaphoreSlim(1);
 var certificatePin = appOnlyTls ? certificate!.GetCertHashString(HashAlgorithmName.SHA256) : null;
-var nearby = new NearbyDevices(lanAddress is null ? null : transferUrl, certificatePin);
-var connections = new ConnectionRequests(certificatePin, transferUrl);
+var friendDirectory = settings["FriendDirectory"] ?? Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenDropWindows");
+var friends = new FriendBook(friendDirectory);
+var nearby = new NearbyDevices(lanAddress is null ? null : transferUrl, certificatePin, friends);
+var connections = new ConnectionRequests(certificatePin, transferUrl, friends);
 builder.Services.AddHostedService<NearbyDevices>(_ => nearby);
 await using var app = builder.Build();
 
@@ -101,7 +104,7 @@ app.Use(async (context, next) =>
         context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
         limit.MaxRequestBodySize = 4096;
 
-    if (appOnlyTls && context.Request.IsHttps && !nearby.IsVisible)
+    if (appOnlyTls && context.Request.IsHttps && !nearby.IsDiscoverable)
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
@@ -139,6 +142,20 @@ app.MapPost("/owner/nearby", (HttpContext context, NearbyVisibility visibility) 
     if (!visibility.Enabled) connections.ClearPending();
     return Results.Ok(nearby.Snapshot());
 });
+app.MapPost("/owner/friends/visible", (HttpContext context, FriendVisibility visibility) =>
+{
+    if (!IsOwnerAction(context)) return Results.NotFound();
+    nearby.SetFriendsVisibility(visibility.Enabled);
+    if (!visibility.Enabled) connections.ClearPending();
+    return Results.Ok(nearby.Snapshot());
+});
+app.MapPost("/owner/friends/remove", (HttpContext context, RemoveFriend friend) =>
+{
+    if (!IsOwnerAction(context) || !ConnectionRequests.IsSecret(friend.Id)) return Results.NotFound();
+    if (!friends.Remove(friend.Id)) return Results.Problem("Die Freundesliste konnte nicht gespeichert werden.");
+    connections.ClearPending();
+    return Results.Ok(nearby.Snapshot());
+});
 app.MapGet("/owner/requests", (HttpContext context) => IsOwner(context)
     ? Results.Ok(connections.Pending()) : Results.NotFound());
 app.MapPost("/owner/requests/respond", (HttpContext context, ConnectionChoice choice) =>
@@ -151,7 +168,7 @@ app.MapPost("/owner/request", async (HttpContext context, SendOffer offer) =>
     var peer = nearby.GetEndpoint(offer.Address);
     if (peer is null) return Results.Ok(new OfferResult("unreachable"));
     var result = await ConnectionRequests.SendAsync(peer, "/peer/request",
-        new IncomingOffer(Environment.MachineName, offer.Secret), context.RequestAborted);
+        new IncomingOffer(Environment.MachineName, offer.Secret, offer.AddFriend && peer.FriendKey is null, peer.FriendKey), context.RequestAborted);
     if (result.State == "pending")
         result = result with { Code = ConnectionRequests.Code(peer.Pin, offer.Secret) };
     return Results.Ok(result);
@@ -170,14 +187,17 @@ app.MapPost("/owner/request/status", async (HttpContext context, SendOffer offer
         link.UserInfo.Length != 0 || link.Query.Length != 0 ||
         !System.Text.RegularExpressions.Regex.IsMatch(link.Fragment, @"\A#pair=[0-9A-F]{64}&pin=" + peer.Pin + @"\z")))
         return Results.Ok(new OfferResult("unreachable"));
+    if (result.State == "accepted" && result.FriendAdded && offer.AddFriend && !friends.Add(peer.Name, offer.Secret))
+        result = result with { FriendAdded = false };
     return Results.Ok(result);
 });
 
 app.MapPost("/peer/request", (HttpContext context, IncomingOffer offer) =>
-    appOnlyTls && nearby.IsVisible && context.Request.IsHttps && context.Connection.RemoteIpAddress is { } address
+    appOnlyTls && nearby.IsDiscoverable && context.Request.IsHttps && context.Connection.RemoteIpAddress is { } address
+        && (nearby.IsVisible || (nearby.FriendsVisible && friends.Contains(offer.FriendKey)))
         ? Results.Ok(connections.Receive(address, offer)) : Results.NotFound());
 app.MapPost("/peer/request/status", (HttpContext context, OfferProof offer) =>
-    appOnlyTls && nearby.IsVisible && context.Request.IsHttps && context.Connection.RemoteIpAddress is { } address &&
+    appOnlyTls && nearby.IsDiscoverable && context.Request.IsHttps && context.Connection.RemoteIpAddress is { } address &&
     Guid.TryParseExact(offer.Id, "N", out _)
         ? Results.Ok(connections.Status(address, offer.Id, offer.Secret)) : Results.NotFound());
 
@@ -189,7 +209,10 @@ app.MapPost("/api/upload", async (HttpContext context) =>
 {
     var request = context.Request;
     var authorization = request.Headers.Authorization.ToString();
-    if (!(request.IsHttps && connections.AllowsUpload(context.Connection.RemoteIpAddress, authorization)) &&
+    var approved = request.IsHttps && connections.AllowsUpload(context.Connection.RemoteIpAddress, authorization);
+    if (appOnlyTls && request.IsHttps && !nearby.IsVisible && !approved)
+        return Results.Problem("In diesem Modus ist eine bestätigte Freundesanfrage nötig.", statusCode: 401);
+    if (!approved &&
         (DateTimeOffset.UtcNow >= expiresAt ||
         authorization.Length != 7 + tokenBytes.Length ||
         !authorization.StartsWith("Bearer ", StringComparison.Ordinal) ||

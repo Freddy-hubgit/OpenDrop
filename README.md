@@ -104,6 +104,18 @@ Für Windows-zu-Windows erstellt die Desktop-App bei einer privaten WLAN-Adresse
 
 Wenn beide Windows-Apps mindestens Version 1.5.0 verwenden, klickt der Sender beim gefundenen Gerät auf **Verbinden**. Vergleicht den sechsstelligen Code und wählt auf dem Empfänger **Annehmen** oder **Ablehnen**. Nach drei Ablehnungen werden weitere Anfragen derselben IP-Adresse für fünf Minuten abgewiesen. **Updates prüfen** wiederholt den automatischen GitHub-Check im App-Fenster.
 
+### Freunde im WLAN
+
+Beide Windows-Apps brauchen mindestens Version 1.6.0. Schaltet zum ersten Verbinden **Im WLAN sichtbar** ein. Der Sender wählt **Als Freund hinzufügen**. Der Empfänger vergleicht den angezeigten Code, markiert **Als Freund speichern** und nimmt die Anfrage an. Danach steht der Kontakt in beiden Freundeslisten.
+
+Später kann die allgemeine Sichtbarkeit aus bleiben. Schaltet auf beiden Rechnern **Für Freunde sichtbar** ein. OpenDrop sendet dafür verschlüsselte Suchmeldungen im selben WLAN. Nur gespeicherte Freunde können die Meldungen zuordnen. Eine Dateiübertragung muss weiterhin einzeln angenommen werden. Beim App-Start sind beide Sichtbarkeitsschalter aus. Das Entfernen eines Freundes widerruft den lokalen Geräteschlüssel.
+
+Der lokale Integrationstest benötigt aktives IPv4-WLAN und eine veröffentlichte Desktop-EXE. Er startet zwei getrennte Instanzen mit eigenen Testprofilen:
+
+```powershell
+python .\tests\friends_smoke.py C:\Pfad\zu\OpenDrop.Windows.exe
+```
+
 ## AirDrop-Status
 
 Die Schaltfläche **WLAN-Adapter prüfen** auf der Empfangsseite listet die von Windows erkannten WLAN-Adapter. Der Status unterscheidet zwischen einem fehlenden Adapter, einem Fehler beim Auslesen und ungeprüfter AWDL-Unterstützung. Das native AirDrop-Modul ist noch ausstehend.
