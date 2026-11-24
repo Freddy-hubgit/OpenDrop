@@ -49,6 +49,16 @@ if (settings["LanIp"] is { Length: > 0 } lanIp)
     transferUrl = new UriBuilder("https", host, port).Uri.GetLeftPart(UriPartial.Authority);
 }
 
+var appOnlyTls = false;
+#if OPENDROP_DESKTOP
+if (lanAddress is null && PeerCertificate.FindWifiAddress() is { } wifiAddress)
+{
+    certificate = PeerCertificate.Create(wifiAddress);
+    lanAddress = wifiAddress;
+    transferUrl = new UriBuilder("https", wifiAddress.ToString(), port).Uri.GetLeftPart(UriPartial.Authority);
+    appOnlyTls = true;
+}
+#endif
 using var tlsCertificate = certificate;
 var allowedLanHost = new Uri(transferUrl).Host;
 builder.WebHost.ConfigureKestrel(server =>
@@ -65,9 +75,16 @@ var store = new Inbox(inbox);
 var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 var tokenBytes = Encoding.ASCII.GetBytes(token);
 var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
-var invitation = $"{transferUrl}/#pair={token}";
+var invitation = $"{(appOnlyTls ? localUrl : transferUrl)}/#pair={token}";
+var windowsInvitation = appOnlyTls
+    ? $"{transferUrl}/#pair={token}&pin={certificate!.GetCertHashString(HashAlgorithmName.SHA256)}"
+    : invitation;
 var qr = PngByteQRCodeHelper.GetQRCode(invitation, QRCodeGenerator.ECCLevel.Q, 6);
 using var uploadSlot = new SemaphoreSlim(1);
+var certificatePin = appOnlyTls ? certificate!.GetCertHashString(HashAlgorithmName.SHA256) : null;
+var nearby = new NearbyDevices(lanAddress is null ? null : transferUrl, certificatePin);
+var connections = new ConnectionRequests(certificatePin, transferUrl);
+builder.Services.AddHostedService<NearbyDevices>(_ => nearby);
 await using var app = builder.Build();
 
 app.Use(async (context, next) =>
@@ -77,6 +94,16 @@ app.Use(async (context, next) =>
         context.Request.Host.Port != port)
     {
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+
+    if (context.Request.Path.StartsWithSegments("/peer") &&
+        context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+        limit.MaxRequestBodySize = 4096;
+
+    if (appOnlyTls && context.Request.IsHttps && !nearby.IsVisible)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
     }
 
@@ -96,11 +123,64 @@ app.MapGet("/owner", (HttpContext context) =>
     IsOwner(context) ? Results.File(Path.Combine(app.Environment.ContentRootPath, "owner.html"),
         "text/html; charset=utf-8") : Results.NotFound());
 app.MapGet("/owner/invitation", (HttpContext context) => IsOwner(context)
-    ? Results.Ok(new { invitation, expiresAt, inbox, receipts = store.RecentReceipts() })
+    ? Results.Ok(new { invitation, windowsInvitation = appOnlyTls && !nearby.IsVisible ? null : windowsInvitation, appOnlyTls, expiresAt, inbox, receipts = store.RecentReceipts() })
     : Results.NotFound());
 app.MapGet("/owner/airdrop", (HttpContext context) => IsOwner(context)
     ? Results.Ok(AirDropStatus.Read())
     : Results.NotFound());
+app.MapGet("/owner/nearby", (HttpContext context) => IsOwner(context)
+    ? Results.Ok(nearby.Snapshot())
+    : Results.NotFound());
+app.MapPost("/owner/nearby", (HttpContext context, NearbyVisibility visibility) =>
+{
+    if (!IsOwner(context) || context.Request.Headers["X-OpenDrop-UI"] != "nearby")
+        return Results.NotFound();
+    nearby.SetVisibility(visibility.Enabled);
+    if (!visibility.Enabled) connections.ClearPending();
+    return Results.Ok(nearby.Snapshot());
+});
+app.MapGet("/owner/requests", (HttpContext context) => IsOwner(context)
+    ? Results.Ok(connections.Pending()) : Results.NotFound());
+app.MapPost("/owner/requests/respond", (HttpContext context, ConnectionChoice choice) =>
+    IsOwnerAction(context) && Guid.TryParseExact(choice.Id, "N", out _)
+        ? Results.Ok(connections.Respond(choice)) : Results.NotFound());
+
+app.MapPost("/owner/request", async (HttpContext context, SendOffer offer) =>
+{
+    if (!IsOwnerAction(context) || !ConnectionRequests.IsSecret(offer.Secret)) return Results.NotFound();
+    var peer = nearby.GetEndpoint(offer.Address);
+    if (peer is null) return Results.Ok(new OfferResult("unreachable"));
+    var result = await ConnectionRequests.SendAsync(peer, "/peer/request",
+        new IncomingOffer(Environment.MachineName, offer.Secret), context.RequestAborted);
+    if (result.State == "pending")
+        result = result with { Code = ConnectionRequests.Code(peer.Pin, offer.Secret) };
+    return Results.Ok(result);
+});
+
+app.MapPost("/owner/request/status", async (HttpContext context, SendOffer offer) =>
+{
+    if (!IsOwnerAction(context) || !ConnectionRequests.IsSecret(offer.Secret) ||
+        !Guid.TryParseExact(offer.Id, "N", out _)) return Results.NotFound();
+    var peer = nearby.GetEndpoint(offer.Address);
+    if (peer is null) return Results.Ok(new OfferResult("unreachable"));
+    var result = await ConnectionRequests.SendAsync(peer, "/peer/request/status",
+        new OfferProof(offer.Id!, offer.Secret), context.RequestAborted);
+    if (result.State == "accepted" && (!Uri.TryCreate(result.Invitation, UriKind.Absolute, out var link) ||
+        link.GetLeftPart(UriPartial.Authority) != peer.Origin || link.AbsolutePath != "/" ||
+        link.UserInfo.Length != 0 || link.Query.Length != 0 ||
+        !System.Text.RegularExpressions.Regex.IsMatch(link.Fragment, @"\A#pair=[0-9A-F]{64}&pin=" + peer.Pin + @"\z")))
+        return Results.Ok(new OfferResult("unreachable"));
+    return Results.Ok(result);
+});
+
+app.MapPost("/peer/request", (HttpContext context, IncomingOffer offer) =>
+    appOnlyTls && nearby.IsVisible && context.Request.IsHttps && context.Connection.RemoteIpAddress is { } address
+        ? Results.Ok(connections.Receive(address, offer)) : Results.NotFound());
+app.MapPost("/peer/request/status", (HttpContext context, OfferProof offer) =>
+    appOnlyTls && nearby.IsVisible && context.Request.IsHttps && context.Connection.RemoteIpAddress is { } address &&
+    Guid.TryParseExact(offer.Id, "N", out _)
+        ? Results.Ok(connections.Status(address, offer.Id, offer.Secret)) : Results.NotFound());
+
 app.MapGet("/owner/qr.png", (HttpContext context) => IsOwner(context)
     ? Results.File(qr, "image/png")
     : Results.NotFound());
@@ -109,11 +189,12 @@ app.MapPost("/api/upload", async (HttpContext context) =>
 {
     var request = context.Request;
     var authorization = request.Headers.Authorization.ToString();
-    if (DateTimeOffset.UtcNow >= expiresAt ||
+    if (!(request.IsHttps && connections.AllowsUpload(context.Connection.RemoteIpAddress, authorization)) &&
+        (DateTimeOffset.UtcNow >= expiresAt ||
         authorization.Length != 7 + tokenBytes.Length ||
         !authorization.StartsWith("Bearer ", StringComparison.Ordinal) ||
         !CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(authorization[7..]), tokenBytes))
+            Encoding.UTF8.GetBytes(authorization[7..]), tokenBytes)))
         return Results.Problem("Die Einladung fehlt oder ist abgelaufen.", statusCode: 401);
 
     if (!string.Equals(request.ContentType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
@@ -183,7 +264,7 @@ try
         return;
     }
 
-    await DesktopWindow.ShowAsync(localUrl + "/owner");
+    await DesktopWindow.ShowAsync(localUrl + "/owner", transferUrl: transferUrl);
     await app.StopAsync();
 #else
     await app.RunAsync();
@@ -195,6 +276,9 @@ finally
         foreach (var intermediate in certificateChain)
             intermediate.Dispose();
 }
+
+static bool IsOwnerAction(HttpContext context) =>
+    IsOwner(context) && context.Request.Headers["X-OpenDrop-UI"] == "nearby";
 
 static bool IsOwner(HttpContext context) =>
     !context.Request.IsHttps &&

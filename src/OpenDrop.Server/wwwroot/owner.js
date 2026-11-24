@@ -12,14 +12,24 @@ async function refresh() {
     const expired = Date.parse(data.expiresAt) <= Date.now();
     invite.href = data.invitation;
     invite.hidden = qr.hidden = expired;
+    const copy = document.querySelector('#copy-invite');
+    copy.hidden = expired || !data.windowsInvitation;
+    copy.dataset.invitation = data.windowsInvitation ?? '';
+    copy.textContent = data.appOnlyTls ? 'Windows-Einladung kopieren' : 'Einladungslink kopieren';
     if (!expired && !qr.hasAttribute('src')) qr.src = '/owner/qr.png';
+    if (window.chrome?.webview) {
+      invite.removeAttribute('target');
+      invite.textContent = 'Einladung hier öffnen';
+    }
 
     const expiry = new Date(data.expiresAt).toLocaleTimeString();
     const localOnly = new URL(data.invitation).hostname === '127.0.0.1';
     status.textContent = expired
       ? 'Einladung abgelaufen. Starte den Server neu, um eine neue zu erstellen.'
       : localOnly
-        ? 'Nur auf diesem PC erreichbar. Einladung gültig bis ' + expiry + '.'
+        ? (data.appOnlyTls
+            ? 'Für Windows-Übertragungen die WLAN-Sichtbarkeit einschalten und die Windows-Einladung kopieren. Gültig bis ' + expiry + '.'
+            : 'Nur auf diesem PC erreichbar. Einladung gültig bis ' + expiry + '.')
         : 'Im gleichen WLAN scannen. Einladung gültig bis ' + expiry + '.';
 
     document.querySelector('#folder').textContent = data.inbox;
@@ -36,6 +46,7 @@ async function refresh() {
     }
   } catch {
     invite.hidden = qr.hidden = true;
+    document.querySelector('#copy-invite').hidden = true;
     status.textContent = 'Der Empfangsserver ist momentan nicht erreichbar.';
   } finally {
     window.setTimeout(refresh, 2500);

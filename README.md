@@ -10,7 +10,7 @@ Baue die Desktop-Variante mit dem .NET 10 SDK aus dem Projektordner:
 dotnet publish .\src\OpenDrop.Server -c Release -p:DesktopBuild=true -r win-x64 --self-contained true -o .\dist\win-x64
 ```
 
-Ein Doppelklick auf `OpenDrop.Windows.exe` im Ausgabeordner startet den Empfangsserver und öffnet die lokale Empfangsseite. Das Fenster bleibt während des Empfangs geöffnet. Beim Schließen stoppt der Server. Die Desktop-Variante verwendet WinForms für dieses Startfenster.
+Ein Doppelklick auf `OpenDrop.Windows.exe` im Ausgabeordner startet den Empfangsserver und zeigt die lokale Empfangsseite im App-Fenster an. Das Fenster bleibt während des Empfangs geöffnet. Beim Schließen stoppt der Server. Die Desktop-Variante verwendet WinForms für dieses Startfenster.
 
 Die App sucht bei jedem Start im Repository `Freddy-hubgit/OpenDrop` nach einem neueren stabilen GitHub-Release. Sie lädt das passende ZIP nach `%LOCALAPPDATA%\OpenDropWindows\Updates` und prüft es gegen die SHA-256-Angabe von GitHub. Zur Installation entpackst du das ZIP in einen neuen Ordner und startest die neue EXE.
 
@@ -87,6 +87,16 @@ try {
 ```
 
 Öffne am PC die Empfangsseite und scanne den QR-Code mit der Kamera des Mobilgeräts. Erscheint eine Zertifikatswarnung, prüfe Namen, Gültigkeit und Zertifikatskette vor einer Übertragung. Bei einem Timeout können Windows-Firewall oder WLAN-Client-Isolation den Zugriff verhindern. Die Anwendung erstellt keine Firewall-Regel und installiert keine Zertifikate oder Treiber.
+
+## Geräte im WLAN finden
+
+Aktiviere **Im WLAN sichtbar** auf beiden OpenDrop-Installationen. Die App verwendet UDP-Multicast auf Port 5189 und gibt dabei PC-Namen und optional die HTTPS-Adresse bekannt. Der Schalter ist beim Start aus. Geräte verschwinden nach ungefähr zehn Sekunden ohne Meldung.
+
+Für Windows-zu-Windows erstellt die Desktop-App bei einer privaten WLAN-Adresse ein temporäres TLS-Zertifikat. Schalte die Sichtbarkeit ein und kopiere die Windows-Einladung. Der Sender wählt deinen PC und fügt den von dir direkt erhaltenen Link in der App ein. Die App prüft den im Link enthaltenen Zertifikatsfingerabdruck. Für andere Geräte bleibt der separat eingerichtete HTTPS-Modus mit einem vertrauenswürdigen Zertifikat verfügbar. Unter **Vollbild** blendet das App-Fenster den Windows-Rahmen aus.
+
+### Verbindungsanfragen
+
+Wenn beide Windows-Apps mindestens Version 1.5.0 verwenden, klickt der Sender beim gefundenen Gerät auf **Verbinden**. Vergleicht den sechsstelligen Code und wählt auf dem Empfänger **Annehmen** oder **Ablehnen**. Nach drei Ablehnungen werden weitere Anfragen derselben IP-Adresse für fünf Minuten abgewiesen. **Updates prüfen** wiederholt den automatischen GitHub-Check im App-Fenster.
 
 ## AirDrop-Status
 

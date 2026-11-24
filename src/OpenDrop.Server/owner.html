@@ -5,24 +5,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dateien empfangen · OpenDrop Windows</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/dashboard.css">
   <script src="/owner.js" defer></script>
+  <script src="/nearby.js" defer></script>
+  <script src="/requests.js" defer></script>
 </head>
-<body>
-  <main>
-    <header>OpenDrop Windows</header>
-    <h1>Dateien empfangen</h1>
-    <p id="status" role="status">Einladung wird geladen …</p>
-    <img id="qr" alt="QR-Code für die Übertragung" width="224" height="224" hidden>
-    <p><a id="invite" target="_blank" rel="noopener noreferrer" hidden>Einladung im Browser öffnen</a></p>
-    <h2>AirDrop</h2>
-    <button id="check-airdrop" type="button">WLAN-Adapter prüfen</button>
-    <p id="airdrop-status" role="status"></p>
-    <ul id="airdrop-adapters"></ul>
-    <h2>Empfangsordner</h2>
-    <p id="folder"></p>
-    <h2>Letzte Übertragungen</h2>
-    <p id="empty">Bisher wurden keine Dateien empfangen.</p>
-    <ul id="receipts"></ul>
-  </main>
+<body class="dashboard">
+  <div class="workspace">
+    <aside aria-labelledby="nearby-heading">
+      <header>OpenDrop Windows</header>
+      <h2 id="nearby-heading">Geräte in der Nähe</h2>
+      <label class="visibility"><input id="visible" type="checkbox"> Im WLAN sichtbar</label>
+      <p id="discovery-status" role="status">Schalte die Sichtbarkeit auf beiden Geräten ein.</p>
+      <ul id="nearby-devices"></ul>
+      <p id="request-status" role="status"></p>
+      <dialog id="incoming-request" aria-labelledby="incoming-title">
+        <h2 id="incoming-title">Verbindungsanfrage</h2>
+        <p id="incoming-text"></p>
+        <button id="request-accept" type="button">Annehmen</button>
+        <button id="request-decline" type="button">Ablehnen</button>
+      </dialog>
+      <form id="connect-peer" hidden>
+        <label for="peer-invite">Einladung von <span id="peer-name"></span></label>
+        <input id="peer-invite" type="url" required placeholder="HTTPS-Einladungslink">
+        <button>Verbinden</button>
+        <p id="connect-status" role="status"></p>
+      </form>
+    </aside>
+    <main>
+      <h1>Dateien empfangen</h1>
+      <p id="status" role="status">Einladung wird geladen …</p>
+      <section class="receive-panel" aria-label="Einladung und Empfangsordner">
+        <img id="qr" alt="QR-Code für die Übertragung" width="224" height="224" hidden>
+        <div>
+          <p><a id="invite" target="_blank" rel="noopener noreferrer" hidden>Einladung öffnen</a></p>
+          <button id="copy-invite" type="button" hidden>Einladungslink kopieren</button>
+          <p id="copy-status" role="status"></p>
+          <h2>Empfangsordner</h2>
+          <p id="folder"></p>
+        </div>
+      </section>
+      <h2>Letzte Übertragungen</h2>
+      <p id="empty">Bisher wurden keine Dateien empfangen.</p>
+      <ul id="receipts"></ul>
+      <details>
+        <summary>AirDrop-Diagnose</summary>
+        <button id="check-airdrop" type="button">WLAN-Adapter prüfen</button>
+        <p id="airdrop-status" role="status"></p>
+        <ul id="airdrop-adapters"></ul>
+      </details>
+    </main>
+  </div>
 </body>
 </html>
