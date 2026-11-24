@@ -1,6 +1,9 @@
 name: OpenDrop Update-Test
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ['OpenDrop Windows release']
+    types: [completed]
   push:
     branches: [main]
     paths:
@@ -11,6 +14,7 @@ permissions:
   contents: read
 jobs:
   update-smoke:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: windows-latest
     timeout-minutes: 12
     steps:
