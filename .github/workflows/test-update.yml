@@ -1,0 +1,35 @@
+name: OpenDrop Update-Test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-update.yml'
+      - 'tests/UpdateSmoke/**'
+      - 'src/OpenDrop.Server/ReleaseUpdater.cs'
+permissions:
+  contents: read
+jobs:
+  update-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test update from the latest published release
+        shell: pwsh
+        env:
+          OPENDROP_GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = gh api repos/${{ github.repository }}/releases/latest --jq .tag_name
+          if ($LASTEXITCODE -ne 0 -or $tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw 'Kein veröffentlichter Release im Format vMAJOR.MINOR.PATCH gefunden.'
+          }
+          $latest = $tag.Substring(1)
+          dotnet run --project ./tests/UpdateSmoke -p:Version=0.1.0 -- $latest
+          if ($LASTEXITCODE -ne 0) { throw 'Update-Download oder Paketprüfung fehlgeschlagen.' }
+          dotnet run --project ./tests/UpdateSmoke "-p:Version=$latest" -- current
+          if ($LASTEXITCODE -ne 0) { throw 'Versionsvergleich fehlgeschlagen.' }

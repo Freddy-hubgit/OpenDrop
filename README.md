@@ -27,6 +27,12 @@ try { Start-Process .\dist\win-x64\OpenDrop.Windows.exe } finally {
 
 Der Release-Workflow baut und veröffentlicht bei einem Git-Tag wie `v1.1.0` ZIPs für Windows x64 und ARM64. Der Tag muss höher als die installierte Versionsnummer sein.
 
+### Updatefunktion testen
+
+Öffne auf GitHub **Actions → OpenDrop Update-Test → Run workflow** und wähle den Branch **main**. Der Workflow lädt mit Leserechten das Paket des aktuellen stabilen Releases über denselben Updater wie die App. Er prüft den Download aus der Sicht einer älteren Version, die Wiederverwendung des ZIPs und das Verhalten einer bereits aktuellen Version. Er veröffentlicht keinen Release.
+
+Für einen Test im App-Fenster starte eine ältere Version mit einem GitHub-Lesetoken und klicke **Updates prüfen**. Die Statuszeile zeigt den Downloadpfad an. Öffne dann das entpackte Update und lies die installierte Version in der Werkzeugleiste ab.
+
 ## Installation und lokaler Test
 
 Installiere das [.NET 10 SDK](https://learn.microsoft.com/dotnet/core/install/windows) für Windows. CMake ist für das MVP entbehrlich.
