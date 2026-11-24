@@ -19,7 +19,8 @@ var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Lo
 var package = Path.Combine(folder, $"OpenDrop-{normalized}-win-{architecture}.zip");
 Require(!File.Exists(package), "Der Download-Test benötigt einen frischen Runner ohne vorhandenes Update.");
 
-var downloaded = await ReleaseUpdater.DownloadAsync(CancellationToken.None);
+var result = await ReleaseUpdater.CheckAsync(CancellationToken.None);
+var downloaded = result.Message;
 Require(downloaded.StartsWith("Update ", StringComparison.Ordinal) &&
     downloaded.Contains(" heruntergeladen: ", StringComparison.Ordinal) && File.Exists(package), downloaded);
 using (var zip = ZipFile.OpenRead(package))
@@ -27,6 +28,11 @@ using (var zip = ZipFile.OpenRead(package))
     foreach (var filename in new[] { "OpenDrop.Windows.exe", "QRCoder.dll", "WebView2Loader.dll", "owner.html" })
         Require(zip.GetEntry(filename) is { Length: > 0 }, $"Eintrag im Update-ZIP fehlt: {filename}");
 }
+
+var installed = UpdateInstaller.Install(result.Package ?? throw new InvalidOperationException("Updatepaket fehlt."),
+    Path.Combine(Path.GetTempPath(), $"OpenDrop-UpdateSmoke-{Guid.NewGuid():N}"));
+Require(File.Exists(installed), "Die installierte EXE fehlt.");
+Console.WriteLine($"Version {latest} wurde aus dem geprüften ZIP installiert.");
 
 var cached = await ReleaseUpdater.DownloadAsync(CancellationToken.None);
 Require(cached.StartsWith("Update ", StringComparison.Ordinal) &&

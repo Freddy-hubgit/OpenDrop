@@ -11,7 +11,10 @@ internal static class ReleaseUpdater
     private const long MaximumSize = 300L * 1024 * 1024;
     private static readonly HttpClient Client = new(new HttpClientHandler { AllowAutoRedirect = false });
 
-    public static async Task<string> DownloadAsync(CancellationToken cancellation)
+    public static async Task<string> DownloadAsync(CancellationToken cancellation) =>
+        (await CheckAsync(cancellation)).Message;
+
+    public static async Task<UpdateResult> CheckAsync(CancellationToken cancellation)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromMinutes(5));
@@ -23,15 +26,15 @@ internal static class ReleaseUpdater
             using var releaseRequest = Request(Repository + "/releases/latest", "application/vnd.github+json", credential);
             using var release = await Client.SendAsync(releaseRequest, token);
             if (release.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized)
-                return "Kein Release erreichbar. Das private Repository benötigt GitHub-Lesezugriff und einen veröffentlichten Release.";
+                return new("Kein Release erreichbar. Das private Repository benötigt GitHub-Lesezugriff und einen veröffentlichten Release.");
             release.EnsureSuccessStatusCode();
             using var metadata = JsonDocument.Parse(await release.Content.ReadAsStreamAsync(token));
             var tag = metadata.RootElement.GetProperty("tag_name").GetString();
             if (tag is null || !Version.TryParse(tag.TrimStart('v'), out var remote))
-                return "Der GitHub-Release hat keine numerische Versionsnummer.";
+                return new("Der GitHub-Release hat keine numerische Versionsnummer.");
             var current = Assembly.GetExecutingAssembly().GetName().Version!;
             var normalized = new Version(remote.Major, remote.Minor, Math.Max(remote.Build, 0), Math.Max(remote.Revision, 0));
-            if (normalized <= current) return "OpenDrop ist aktuell.";
+            if (normalized <= current) return new("OpenDrop ist aktuell.");
 
             var architecture = RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant();
             var name = $"OpenDrop-Windows-win-{architecture}.zip";
@@ -42,7 +45,7 @@ internal static class ReleaseUpdater
                 var digest = asset.GetProperty("digest").GetString();
                 if (size is <= 0 or > MaximumSize || digest is null ||
                     !digest.StartsWith("sha256:", StringComparison.Ordinal) || digest.Length != 71)
-                    return "Der Release enthält keine prüfbaren Paketdaten.";
+                    return new("Der Release enthält keine prüfbaren Paketdaten.");
 
                 var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenDropWindows", "Updates");
                 Directory.CreateDirectory(folder);
@@ -51,7 +54,7 @@ internal static class ReleaseUpdater
                 {
                     await using var existing = File.OpenRead(destination);
                     if (existing.Length == size && await MatchesAsync(existing, digest, token))
-                        return $"Update {remote} bereit: {destination}";
+                        return new($"Update {remote} bereit: {destination}", new(destination, normalized, digest));
                 }
 
                 var id = asset.GetProperty("id").GetInt64();
@@ -72,22 +75,22 @@ internal static class ReleaseUpdater
                     int read;
                     while ((read = await input.ReadAsync(buffer, token)) != 0)
                     {
-                        if (output.Length + read > size) return "Das Updatepaket ist größer als angekündigt.";
+                        if (output.Length + read > size) return new("Das Updatepaket ist größer als angekündigt.");
                         await output.WriteAsync(buffer.AsMemory(0, read), token);
                     }
                     output.Position = 0;
                     if (output.Length != size || !await MatchesAsync(output, digest, token))
-                        return "Die SHA-256-Prüfung des Updates ist fehlgeschlagen.";
+                        return new("Die SHA-256-Prüfung des Updates ist fehlgeschlagen.");
                 }
                 File.Move(temp, destination, overwrite: true);
-                return $"Update {remote} heruntergeladen: {destination}";
+                return new($"Update {remote} heruntergeladen: {destination}", new(destination, normalized, digest));
             }
-            return "Der neuere Release enthält kein Paket für diesen Windows-Prozessor.";
+            return new("Der neuere Release enthält kein Paket für diesen Windows-Prozessor.");
         }
         catch (Exception error) when (error is HttpRequestException or IOException or UnauthorizedAccessException
             or OperationCanceledException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
-            return "Die Updateprüfung ist fehlgeschlagen. Der Empfangsserver läuft weiter.";
+            return new("Die Updateprüfung ist fehlgeschlagen. Der Empfangsserver läuft weiter.");
         }
         finally
         {
@@ -112,3 +115,6 @@ internal static class ReleaseUpdater
         Convert.ToHexString(await SHA256.HashDataAsync(stream, token))
             .Equals(digest[7..], StringComparison.OrdinalIgnoreCase);
 }
+
+internal sealed record UpdateResult(string Message, UpdatePackage? Package = null);
+internal sealed record UpdatePackage(string Path, Version Version, string Digest);

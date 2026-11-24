@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/OpenDrop.Server/ReleaseUpdater.cs" Link="ReleaseUpdater.cs" />
+    <Compile Include="../../src/OpenDrop.Server/UpdateInstaller.cs" Link="UpdateInstaller.cs" />
   </ItemGroup>
 </Project>

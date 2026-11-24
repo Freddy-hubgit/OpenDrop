@@ -264,8 +264,25 @@ try
         return;
     }
 
-    await DesktopWindow.ShowAsync(localUrl + "/owner", transferUrl: transferUrl);
+    var restartExecutable = await DesktopWindow.ShowAsync(localUrl + "/owner", transferUrl: transferUrl);
     await app.StopAsync();
+    if (restartExecutable is not null)
+    {
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(restartExecutable)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetDirectoryName(restartExecutable)!
+            };
+            foreach (var argument in args) start.ArgumentList.Add(argument);
+            System.Diagnostics.Process.Start(start);
+        }
+        catch (System.ComponentModel.Win32Exception error)
+        {
+            await DesktopWindow.ShowAsync(localUrl, $"Die Installation ist fertig, der Start ist fehlgeschlagen: {error.Message} ({restartExecutable})");
+        }
+    }
 #else
     await app.RunAsync();
 #endif

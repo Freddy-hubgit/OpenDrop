@@ -12,7 +12,7 @@ dotnet publish .\src\OpenDrop.Server -c Release -p:DesktopBuild=true -r win-x64 
 
 Ein Doppelklick auf `OpenDrop.Windows.exe` im Ausgabeordner startet den Empfangsserver und zeigt die lokale Empfangsseite im App-Fenster an. Das Fenster bleibt während des Empfangs geöffnet. Beim Schließen stoppt der Server. Die Desktop-Variante verwendet WinForms für dieses Startfenster.
 
-Die App sucht bei jedem Start im Repository `Freddy-hubgit/OpenDrop` nach einem neueren stabilen GitHub-Release. Sie lädt das passende ZIP nach `%LOCALAPPDATA%\OpenDropWindows\Updates` und prüft es gegen die SHA-256-Angabe von GitHub. Zur Installation entpackst du das ZIP in einen neuen Ordner und startest die neue EXE.
+Die App sucht bei jedem Start im Repository `Freddy-hubgit/OpenDrop` nach einem neueren stabilen GitHub-Release. Sie lädt das passende ZIP nach `%LOCALAPPDATA%\OpenDropWindows\Updates` und prüft es gegen die SHA-256-Angabe von GitHub. Wenn neben **Updates prüfen** ein Update bereitsteht, klickst du auf **Installieren**. OpenDrop prüft das ZIP erneut, installiert die Version in einem eigenen Ordner unter dem Benutzerprofil, beendet den bisherigen Server und startet die neue App.
 
 Für das private Repository braucht die App die Prozessvariable `OPENDROP_GITHUB_TOKEN`. Verwende ein **Fine-grained Personal Access Token** mit Zugriff nur auf dieses Repository und **Contents: Read-only**. Gib es per verdeckter PowerShell-Abfrage ein und entferne die Variable nach dem App-Start wieder:
 
@@ -31,7 +31,7 @@ Der Release-Workflow baut und veröffentlicht bei einem Git-Tag wie `v1.1.0` ZIP
 
 Öffne auf GitHub **Actions → OpenDrop Update-Test → Run workflow** und wähle den Branch **main**. Der Workflow lädt mit Leserechten das Paket des aktuellen stabilen Releases über denselben Updater wie die App. Er prüft den Download aus der Sicht einer älteren Version, die Wiederverwendung des ZIPs und das Verhalten einer bereits aktuellen Version. Er veröffentlicht keinen Release.
 
-Für einen Test im App-Fenster starte eine ältere Version mit einem GitHub-Lesetoken und klicke **Updates prüfen**. Die Statuszeile zeigt den Downloadpfad an. Öffne dann das entpackte Update und lies die installierte Version in der Werkzeugleiste ab.
+Für einen Test im App-Fenster starte eine ältere Version mit einem GitHub-Lesetoken und klicke **Updates prüfen**. In der Werkzeugleiste erscheint der Status. Klicke bei einem bereitstehenden Update auf **Installieren** und prüfe nach dem Neustart die angezeigte Versionsnummer.
 
 ## Installation und lokaler Test
 

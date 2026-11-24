@@ -12,7 +12,7 @@
     <DefineConstants>$(DefineConstants);OPENDROP_DESKTOP</DefineConstants>
   </PropertyGroup>
   <ItemGroup Condition="'$(DesktopBuild)' != 'true'">
-    <Compile Remove="DesktopWindow.cs;ReleaseUpdater.cs" />
+    <Compile Remove="DesktopWindow.cs;ReleaseUpdater.cs;UpdateInstaller.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4022.49" Condition="'$(DesktopBuild)' == 'true'" />

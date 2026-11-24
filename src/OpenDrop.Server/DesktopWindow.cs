@@ -4,6 +4,7 @@ using System.Windows.Forms;
 internal sealed class DesktopWindow : Form
 {
     private readonly CancellationTokenSource closed = new();
+    private string? restartExecutable;
 
     public DesktopWindow(string url, string? startupError, string? transferUrl)
     {
@@ -79,39 +80,73 @@ internal sealed class DesktopWindow : Form
             button.BackColor = Color.FromArgb(24, 39, 55);
             button.ForeColor = ForeColor;
         }
-        var update = new Label { AutoEllipsis = true, Dock = DockStyle.Fill, Text = "Suche nach Updates …", Padding = new(10) };
+        var update = new Label { AutoSize = true, MaximumSize = new(470, 0), Text = "Suche nach Updates …",
+            Padding = new(8, 7, 4, 0) };
+        var install = new Button { Text = "Installieren", AutoSize = true, Visible = false, FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(39, 83, 119), ForeColor = ForeColor };
+        UpdatePackage? package = null;
+        var installing = false;
+        FormClosing += (_, e) => e.Cancel = installing;
         var checkUpdate = new Button { Text = "Updates prüfen", AutoSize = true, FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(24, 39, 55), ForeColor = ForeColor };
         async Task CheckUpdatesAsync()
         {
             checkUpdate.Enabled = false;
+            install.Visible = false;
+            package = null;
             update.Text = "Suche nach Updates …";
-            var result = await ReleaseUpdater.DownloadAsync(closed.Token);
+            var result = await ReleaseUpdater.CheckAsync(closed.Token);
             if (!IsDisposed && !closed.IsCancellationRequested)
             {
-                update.Text = result;
+                package = result.Package;
+                update.Text = package is null ? result.Message : $"Version {package.Version.ToString(3)} bereit.";
+                install.Visible = package is not null;
                 checkUpdate.Enabled = true;
             }
         }
         checkUpdate.Click += async (_, _) => await CheckUpdatesAsync();
+        install.Click += async (_, _) =>
+        {
+            if (package is not { } ready) return;
+            installing = true;
+            install.Enabled = checkUpdate.Enabled = false;
+            update.Text = $"Installiere Version {ready.Version.ToString(3)} …";
+            try
+            {
+                restartExecutable = await Task.Run(() => UpdateInstaller.Install(ready));
+                installing = false;
+                Close();
+            }
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+            {
+                update.Text = $"Installation fehlgeschlagen: {error.Message}";
+            }
+            finally
+            {
+                installing = false;
+                if (!IsDisposed) install.Enabled = checkUpdate.Enabled = true;
+            }
+        };
         var toolbar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Padding = new(4) };
         toolbar.Controls.Add(home);
         toolbar.Controls.Add(full);
         toolbar.Controls.Add(status);
         toolbar.Controls.Add(checkUpdate);
+        toolbar.Controls.Add(update);
+        toolbar.Controls.Add(install);
         var version = typeof(DesktopWindow).Assembly.GetName().Version!.ToString(3);
         var versionInfo = new Label
         {
             Text = $"Version {version}", AutoSize = true, Padding = new(10, 7, 6, 0)
         };
         toolbar.Controls.Add(versionInfo);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+
         layout.Controls.Add(toolbar, 0, 0);
         layout.Controls.Add(webView, 0, 1);
-        layout.Controls.Add(update, 0, 2);
+
         Controls.Add(layout);
 
         Shown += async (_, _) =>
@@ -181,9 +216,9 @@ internal sealed class DesktopWindow : Form
         FormClosed += (_, _) => closed.Cancel();
     }
 
-    public static Task ShowAsync(string url, string? startupError = null, string? transferUrl = null)
+    public static Task<string?> ShowAsync(string url, string? startupError = null, string? transferUrl = null)
     {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
             try
@@ -192,7 +227,7 @@ internal sealed class DesktopWindow : Form
                 Application.EnableVisualStyles();
                 using var window = new DesktopWindow(url, startupError, transferUrl);
                 Application.Run(window);
-                completion.SetResult();
+                completion.SetResult(window.restartExecutable);
             }
             catch (Exception error) { completion.SetException(error); }
         });
